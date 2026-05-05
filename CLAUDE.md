@@ -13,13 +13,19 @@ open tictactoe.html
 
 ## Git Workflow
 
-After every code change: commit with a clean message and push to GitHub.
+**After every code change, commit and push to GitHub immediately.** This is non-negotiable — every completed change must be saved remotely so work is never lost and any version can be reverted to.
 
 ```bash
 git add <specific-files>
 git commit -m "descriptive message"
 git push
 ```
+
+Rules:
+- Stage specific files by name, never `git add -A` or `git add .`
+- Commit messages use imperative mood and explain the *why*, not just the what
+- One logical change per commit — don't batch unrelated edits together
+- Push immediately after every commit, no exceptions
 
 Remote: `https://github.com/averyamidon12/sector-zero` (branch: `main`)
 
