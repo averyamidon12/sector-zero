@@ -66,19 +66,23 @@
 
   function update() {
     const now = new Date();
-    let h = now.getHours();
-    const m = now.getMinutes();
-    const s = now.getSeconds();
-    const ampm = h >= 12 ? 'pm' : 'am';
-    h = h % 12 || 12;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric', minute: '2-digit', second: '2-digit',
+      hour12: true, weekday: 'long', month: 'short', day: 'numeric'
+    }).formatToParts(now);
 
-    const pad = n => String(n).padStart(2, '0');
+    const get = type => parts.find(p => p.type === type)?.value ?? '';
+    const h = get('hour');
+    const m = get('minute');
+    const s = get('second');
+    const ampm = get('dayperiod').toLowerCase();
 
     document.getElementById('time').innerHTML =
-      `${h}:${pad(m)}:<span class="seconds">${pad(s)}</span><span class="ampm">${ampm}</span>`;
+      `${h}:${m}:<span class="seconds">${s}</span><span class="ampm">${ampm}</span>`;
 
     document.getElementById('date').textContent =
-      `${DAYS[now.getDay()]}  ·  ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+      `${get('weekday')}  ·  ${get('month')} ${get('day')}`;
   }
 
   update();
