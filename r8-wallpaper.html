@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Audi R8 Live Wallpaper</title>
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c');
+const cx = cv.getContext('2d');
+let W, H, GY, t = 0, last = 0;
+
+function resize() {
+  W = cv.width = window.innerWidth;
+  H = cv.height = window.innerHeight;
+  GY = H * 0.70;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── Static data ─────────────────────────────────────────────────────────────
+
+const STARS = Array.from({ length: 140 }, (_, i) => ({
+  x: (i * 137.508) % 1,
+  y: (i * 73.127) % 0.55,
+  r: 0.3 + ((i * 31) % 5) * 0.25,
+  ph: i * 0.71,
+}));
+
+const BUILDINGS = [
+  [0.00, 0.17, 0.035], [0.04, 0.27, 0.025], [0.07, 0.21, 0.038],
+  [0.12, 0.36, 0.028], [0.16, 0.23, 0.042], [0.21, 0.19, 0.03],
+  [0.25, 0.41, 0.032], [0.30, 0.27, 0.038], [0.35, 0.21, 0.028],
+  [0.39, 0.31, 0.042],
+  [0.66, 0.24, 0.038], [0.71, 0.34, 0.028], [0.76, 0.19, 0.042],
+  [0.81, 0.29, 0.032], [0.86, 0.21, 0.038], [0.91, 0.27, 0.028],
+  [0.95, 0.17, 0.048],
+];
+
+// Pre-generate windows (deterministic, never flickers randomly per-frame)
+const WINDOWS = BUILDINGS.map((b, bi) =>
+  Array.from({ length: 60 }, (_, i) => ({
+    cx: b[0] + (i % 6) / 6 * b[2] + b[2] / 12,
+    cy: 1 - b[1] + Math.floor(i / 6) / 10 * b[1] + b[1] / 20,
+    lit: (bi * 37 + i * 13) % 5 !== 0,
+    warm: (bi * 23 + i * 7) % 4 === 0,
+  }))
+);
+
+const RAIN = Array.from({ length: 260 }, (_, i) => ({
+  x: Math.random(),
+  y: Math.random(),
+  len: 12 + (i * 17) % 22,
+  spd: 0.018 + (i * 7 % 10) * 0.002,
+  a: 0.12 + (i % 5) * 0.04,
+}));
+
+const STREAKS = Array.from({ length: 22 }, (_, i) => ({
+  x: Math.random(),
+  y: 0.08 + (i * 97 % 45) / 100,
+  len: (80 + (i * 37) % 180) / 1920,
+  spd: (22 + (i * 13) % 35) / 1920,
+  a: 0.05 + (i % 5) * 0.04,
+}));
+
+let sparks = [];
+function emitSpark(sx, sy) {
+  if (Math.random() > 0.45) return;
+  const n = 1 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    sparks.push({
+      x: sx, y: sy,
+      vx: (-3 - Math.random() * 5) / W,
+      vy: (-1 - Math.random() * 4) / H,
+      life: 1,
+      dec: 0.025 + Math.random() * 0.04,
+      sz: 1 + Math.random() * 2,
+      hue: 18 + Math.random() * 28,
+    });
+  }
+}
+
+// ─── Sky / stars / moon ──────────────────────────────────────────────────────
+
+function drawSky() {
+  const g = cx.createLinearGradient(0, 0, 0, GY);
+  g.addColorStop(0, '#000510');
+  g.addColorStop(0.55, '#020916');
+  g.addColorStop(1, '#060f22');
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, W, GY);
+}
+
+function drawStars() {
+  STARS.forEach(s => {
+    const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.4 + s.ph));
+    cx.globalAlpha = tw * 0.85;
+    cx.fillStyle = '#fff';
+    cx.beginPath();
+    cx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+    cx.fill();
+  });
+  cx.globalAlpha = 1;
+}
+
+function drawMoon() {
+  const mx = W * 0.81, my = H * 0.07;
+  cx.shadowBlur = 45;
+  cx.shadowColor = '#99bbff';
+  cx.fillStyle = '#cce4ff';
+  cx.beginPath();
+  cx.arc(mx, my, 20, 0, Math.PI * 2);
+  cx.fill();
+  cx.shadowBlur = 0;
+  cx.fillStyle = '#b8d5f5';
+  cx.beginPath(); cx.arc(mx + 5, my - 5, 5, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#cce4ff';
+  cx.beginPath(); cx.arc(mx + 5, my - 5, 4.2, 0, Math.PI * 2); cx.fill();
+}
+
+// ─── Cityscape ───────────────────────────────────────────────────────────────
+
+function drawCity() {
+  BUILDINGS.forEach((b, bi) => {
+    const bx = b[0] * W, bh = b[1] * H, bw = b[2] * W;
+    const by = GY - bh;
+
+    // Building body
+    cx.fillStyle = '#050c18';
+    cx.fillRect(bx, by, bw, bh);
+
+    // Highlight edge
+    cx.fillStyle = 'rgba(40,80,140,0.15)';
+    cx.fillRect(bx, by, 2, bh);
+
+    // Windows
+    WINDOWS[bi].forEach(w => {
+      if (!w.lit) return;
+      cx.globalAlpha = 0.65;
+      cx.fillStyle = w.warm ? '#ffcc55' : '#4488cc';
+      cx.fillRect(w.cx * W, w.cy * H, bw * 0.12, bh * 0.04);
+    });
+    cx.globalAlpha = 1;
+
+    // Rooftop antenna on tall buildings
+    if (b[1] > 0.3) {
+      cx.strokeStyle = 'rgba(80,110,160,0.5)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      cx.moveTo(bx + bw / 2, by);
+      cx.lineTo(bx + bw / 2, by - 18);
+      cx.stroke();
+      // blinking light
+      const blink = Math.sin(t * 3.5 + bi) > 0.6;
+      if (blink) {
+        cx.fillStyle = '#ff4444';
+        cx.shadowBlur = 6; cx.shadowColor = '#ff0000';
+        cx.beginPath();
+        cx.arc(bx + bw / 2, by - 19, 2, 0, Math.PI * 2);
+        cx.fill();
+        cx.shadowBlur = 0;
+      }
+    }
+  });
+}
+
+// ─── Road ────────────────────────────────────────────────────────────────────
+
+function drawRoad() {
+  // Asphalt
+  const rg = cx.createLinearGradient(0, GY, 0, H);
+  rg.addColorStop(0, '#090f1a');
+  rg.addColorStop(0.4, '#0c1420');
+  rg.addColorStop(1, '#111928');
+  cx.fillStyle = rg;
+  cx.fillRect(0, GY, W, H - GY);
+
+  // Wet sheen
+  const sg = cx.createLinearGradient(0, GY, 0, H);
+  sg.addColorStop(0, 'rgba(40,70,130,0.35)');
+  sg.addColorStop(0.6, 'rgba(20,40,80,0.1)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = sg;
+  cx.fillRect(0, GY, W, H - GY);
+
+  // Center dashes
+  const dashOff = (t * 85) % 90;
+  cx.save();
+  cx.strokeStyle = '#e8bb00';
+  cx.lineWidth = 3;
+  cx.setLineDash([38, 52]);
+  cx.lineDashOffset = -dashOff;
+  cx.beginPath();
+  cx.moveTo(W / 2, GY + 4);
+  cx.lineTo(W / 2, H);
+  cx.stroke();
+  cx.setLineDash([]);
+  cx.restore();
+
+  // Edge lines
+  cx.strokeStyle = 'rgba(240,240,240,0.35)';
+  cx.lineWidth = 2.5;
+  [0.04, 0.96].forEach(xr => {
+    cx.beginPath();
+    cx.moveTo(W * xr, GY);
+    cx.lineTo(W * xr, H);
+    cx.stroke();
+  });
+
+  // Horizon glow (city light)
+  const hg = cx.createLinearGradient(0, GY - 18, 0, GY + 6);
+  hg.addColorStop(0, 'rgba(60,100,180,0)');
+  hg.addColorStop(1, 'rgba(60,100,180,0.18)');
+  cx.fillStyle = hg;
+  cx.fillRect(0, GY - 18, W, 24);
+}
+
+// ─── Road reflections ─────────────────────────────────────────────────────────
+
+function drawReflections(carX) {
+  // Neon underglow reflection on wet road
+  cx.save();
+  cx.translate(carX, GY);
+  cx.scale(1, 0.22);
+  const pulse = 0.7 + 0.3 * Math.sin(t * 2.5);
+  const ng = cx.createRadialGradient(0, 0, 5, 0, 0, 280);
+  ng.addColorStop(0, `rgba(110,0,255,${0.4 * pulse})`);
+  ng.addColorStop(0.5, `rgba(60,0,180,${0.2 * pulse})`);
+  ng.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = ng;
+  cx.fillRect(-350, 0, 700, 200);
+  cx.restore();
+
+  // Headlight streak on road
+  cx.save();
+  const hs = cx.createLinearGradient(carX - 550, GY + 4, carX - 50, GY + 4);
+  hs.addColorStop(0, 'rgba(255,255,200,0)');
+  hs.addColorStop(0.6, 'rgba(255,255,200,0.18)');
+  hs.addColorStop(1, 'rgba(255,255,200,0)');
+  cx.fillStyle = hs;
+  cx.fillRect(carX - 550, GY + 1, 500, 8);
+  cx.restore();
+}
+
+// ─── Car ─────────────────────────────────────────────────────────────────────
+
+const PI2 = Math.PI * 2;
+const TAU = Math.PI;
+
+function drawWheel(wx, wy, wr) {
+  cx.save();
+  cx.translate(wx, wy);
+
+  // Tire
+  cx.fillStyle = '#0c0c10';
+  cx.strokeStyle = '#1c1c22';
+  cx.lineWidth = 2;
+  cx.beginPath(); cx.arc(0, 0, wr, 0, PI2); cx.fill(); cx.stroke();
+
+  // Sidewall highlight
+  cx.strokeStyle = 'rgba(55,65,85,0.45)';
+  cx.lineWidth = 3.5;
+  cx.beginPath(); cx.arc(0, 0, wr - 3, -TAU * 0.75, TAU * 0.25); cx.stroke();
+
+  // Rim (rotates)
+  cx.save();
+  cx.rotate(-t * 5.5);
+  const rimR = wr * 0.71;
+
+  const rg = cx.createRadialGradient(0, 0, 0, 0, 0, rimR);
+  rg.addColorStop(0, '#3d4a68');
+  rg.addColorStop(0.5, '#283348');
+  rg.addColorStop(1, '#151e30');
+  cx.fillStyle = rg;
+  cx.beginPath(); cx.arc(0, 0, rimR, 0, PI2); cx.fill();
+
+  // 5 spokes
+  for (let s = 0; s < 5; s++) {
+    const a = (s / 5) * PI2;
+    const x1 = Math.cos(a) * rimR * 0.18, y1 = Math.sin(a) * rimR * 0.18;
+    const x2 = Math.cos(a) * rimR * 0.9,  y2 = Math.sin(a) * rimR * 0.9;
+    cx.strokeStyle = '#7888a8';
+    cx.lineWidth = 7;
+    cx.lineCap = 'round';
+    cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+    cx.strokeStyle = '#a0b0cc';
+    cx.lineWidth = 2;
+    cx.stroke();
+  }
+
+  // Center cap
+  cx.fillStyle = '#1e2634';
+  cx.strokeStyle = '#6a7a90';
+  cx.lineWidth = 1.5;
+  cx.beginPath(); cx.arc(0, 0, rimR * 0.2, 0, PI2); cx.fill(); cx.stroke();
+
+  // Brake rotor glow (flickers through spokes)
+  const bk = 0.12 + 0.08 * Math.sin(t * 3.2);
+  cx.shadowBlur = 10;
+  cx.shadowColor = `rgba(255,70,0,${bk * 2})`;
+  cx.strokeStyle = `rgba(255,60,0,${bk})`;
+  cx.lineWidth = 5;
+  cx.beginPath(); cx.arc(0, 0, rimR * 0.54, 0, PI2); cx.stroke();
+  cx.shadowBlur = 0;
+
+  cx.restore();
+  cx.restore();
+}
+
+function drawCar() {
+  // Car coordinate system: centered on screen X, bottom = GY
+  const sc = (W * 0.56) / 480;
+  const orgX = W * 0.46, orgY = GY;
+
+  cx.save();
+  cx.translate(orgX, orgY);
+  cx.scale(sc, sc);
+
+  const WR = 54, FWX = -135, RWX = 135;
+  const WCY = -WR;  // wheel center y in car space
+
+  // ── Headlight cone ──────────────────────────────────────────
+  cx.save();
+  const hcg = cx.createLinearGradient(-235, 0, -700, 0);
+  hcg.addColorStop(0, 'rgba(255,255,190,0.22)');
+  hcg.addColorStop(0.25, 'rgba(255,255,190,0.10)');
+  hcg.addColorStop(1, 'rgba(255,255,190,0)');
+  cx.fillStyle = hcg;
+  cx.beginPath();
+  cx.moveTo(-235, -95);
+  cx.lineTo(-235, -30);
+  cx.lineTo(-780, 20);
+  cx.lineTo(-780, -110);
+  cx.closePath();
+  cx.fill();
+  cx.restore();
+
+  // ── Ground shadow ───────────────────────────────────────────
+  cx.save();
+  const gsg = cx.createRadialGradient(0, 8, 0, 0, 8, 260);
+  gsg.addColorStop(0, 'rgba(0,0,20,0.7)');
+  gsg.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = gsg;
+  cx.scale(1, 0.18);
+  cx.beginPath(); cx.ellipse(0, 40, 255, 90, 0, 0, PI2); cx.fill();
+  cx.restore();
+
+  // ── Neon underglow ──────────────────────────────────────────
+  cx.save();
+  const pulse = 0.65 + 0.35 * Math.sin(t * 2.5);
+  cx.shadowBlur = 35 * pulse;
+  cx.shadowColor = `rgba(110,0,255,${pulse})`;
+  cx.strokeStyle = `rgba(130,0,255,${0.7 * pulse})`;
+  cx.lineWidth = 2.5;
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(-210, -34); cx.lineTo(210, -34);
+  cx.stroke();
+  cx.shadowBlur = 0;
+  cx.restore();
+
+  // ── Wheels (behind body) ────────────────────────────────────
+  drawWheel(FWX, WCY, WR);
+  drawWheel(RWX, WCY, WR);
+
+  // ── Main body shape ─────────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+
+  // Start at front bottom (nose tip)
+  cx.moveTo(-245, -22);
+  cx.lineTo(-248, -32);
+  // Hood rises smoothly
+  cx.bezierCurveTo(-255, -55, -235, -88, -195, -108);
+  cx.bezierCurveTo(-165, -122, -125, -135, -85, -143);
+  // Windshield base → roofline
+  cx.bezierCurveTo(-60, -150, -22, -157, 20, -159);
+  // Roof flat top
+  cx.lineTo(72, -159);
+  // Rear roofline / C-pillar drop
+  cx.bezierCurveTo(108, -158, 145, -148, 168, -130);
+  // Fastback rear
+  cx.bezierCurveTo(192, -112, 210, -86, 222, -58);
+  // Rear haunch
+  cx.bezierCurveTo(232, -40, 238, -25, 237, -14);
+  cx.lineTo(242, -8);
+  cx.lineTo(242, 0);
+  // Rear sill to front (along bottom)
+  cx.lineTo(-230, 0);
+  cx.lineTo(-245, -8);
+  cx.closePath();
+
+  // Body gradient (deep metallic dark blue)
+  const bg = cx.createLinearGradient(-248, -159, 242, 0);
+  bg.addColorStop(0,   '#08101e');
+  bg.addColorStop(0.2, '#101c34');
+  bg.addColorStop(0.45,'#182440');
+  bg.addColorStop(0.7, '#0e1828');
+  bg.addColorStop(1,   '#070c18');
+  cx.fillStyle = bg;
+  cx.fill();
+
+  // Body edge highlight
+  cx.strokeStyle = 'rgba(80,130,200,0.28)';
+  cx.lineWidth = 1.5;
+  cx.stroke();
+  cx.restore();
+
+  // ── Hood panel highlight ─────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(-246, -28);
+  cx.bezierCurveTo(-245, -70, -215, -102, -180, -118);
+  cx.bezierCurveTo(-210, -95, -235, -62, -232, -25);
+  cx.closePath();
+  const hph = cx.createLinearGradient(-248, -100, -180, -70);
+  hph.addColorStop(0, 'rgba(100,150,220,0.12)');
+  hph.addColorStop(0.5,'rgba(170,205,255,0.2)');
+  hph.addColorStop(1, 'rgba(80,120,190,0.05)');
+  cx.fillStyle = hph;
+  cx.fill();
+  cx.restore();
+
+  // ── Roof highlight ───────────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(-18, -155);
+  cx.lineTo(75, -155);
+  cx.bezierCurveTo(100, -154, 125, -149, 142, -140);
+  cx.bezierCurveTo(115, -146, 75, -150, -15, -149);
+  cx.closePath();
+  cx.fillStyle = 'rgba(150,195,255,0.11)';
+  cx.fill();
+  cx.restore();
+
+  // ── Windshield ───────────────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(-83, -141);
+  cx.bezierCurveTo(-58, -152, -20, -157, 20, -158);
+  cx.lineTo(20, -153);
+  cx.bezierCurveTo(-18, -152, -54, -147, -76, -137);
+  cx.closePath();
+  const wg = cx.createLinearGradient(-83, -158, 20, -134);
+  wg.addColorStop(0, 'rgba(35,72,135,0.82)');
+  wg.addColorStop(0.55,'rgba(55,95,165,0.68)');
+  wg.addColorStop(1, 'rgba(18,45,100,0.88)');
+  cx.fillStyle = wg;
+  cx.fill();
+  // Windshield glare strip
+  cx.fillStyle = 'rgba(175,215,255,0.09)';
+  cx.beginPath();
+  cx.moveTo(-70, -151); cx.lineTo(-15, -157); cx.lineTo(-15, -152); cx.lineTo(-70, -146);
+  cx.fill();
+  cx.restore();
+
+  // ── Rear window ──────────────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(74, -157);
+  cx.bezierCurveTo(108, -157, 145, -148, 166, -132);
+  cx.bezierCurveTo(142, -145, 108, -152, 78, -152);
+  cx.closePath();
+  cx.fillStyle = 'rgba(25,55,105,0.88)';
+  cx.fill();
+  cx.restore();
+
+  // ── Door line ────────────────────────────────────────────────
+  cx.save();
+  cx.strokeStyle = 'rgba(0,15,50,0.55)';
+  cx.lineWidth = 1.5;
+  cx.beginPath();
+  cx.moveTo(-8, -34);
+  cx.bezierCurveTo(-8, -80, -8, -120, -8, -157);
+  cx.stroke();
+  cx.restore();
+
+  // ── Side sill line ───────────────────────────────────────────
+  cx.save();
+  cx.strokeStyle = 'rgba(60,100,180,0.25)';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(-235, -14); cx.lineTo(235, -14);
+  cx.stroke();
+  cx.restore();
+
+  // ── R8 Side blade (iconic air intake) ───────────────────────
+  cx.save();
+  // Dark intake recess
+  cx.fillStyle = '#020508';
+  cx.beginPath();
+  cx.moveTo(26, -122);
+  cx.lineTo(92, -122);
+  cx.bezierCurveTo(102, -122, 115, -105, 115, -90);
+  cx.lineTo(115, -50);
+  cx.lineTo(26, -50);
+  cx.closePath();
+  cx.fill();
+
+  // Intake slats
+  cx.strokeStyle = 'rgba(25,50,90,0.9)';
+  cx.lineWidth = 2;
+  for (let i = 0; i < 8; i++) {
+    const sy = -118 + i * 9;
+    cx.beginPath();
+    cx.moveTo(28, sy);
+    cx.lineTo(112, sy + 5);
+    cx.stroke();
+  }
+  // Blade frame
+  cx.strokeStyle = 'rgba(70,110,175,0.4)';
+  cx.lineWidth = 1;
+  cx.beginPath();
+  cx.moveTo(26, -122);
+  cx.lineTo(92, -122);
+  cx.bezierCurveTo(102, -122, 115, -105, 115, -90);
+  cx.lineTo(115, -50);
+  cx.lineTo(26, -50);
+  cx.closePath();
+  cx.stroke();
+  cx.restore();
+
+  // ── Audi rings ───────────────────────────────────────────────
+  cx.save();
+  cx.translate(-22, -78);
+  cx.strokeStyle = 'rgba(200,218,235,0.72)';
+  cx.lineWidth = 2.2;
+  for (let r = 0; r < 4; r++) {
+    cx.beginPath();
+    cx.arc(r * 15 - 22, 0, 9, 0, PI2);
+    cx.stroke();
+  }
+  cx.restore();
+
+  // ── Front fender arch liner ──────────────────────────────────
+  cx.save();
+  cx.strokeStyle = 'rgba(40,80,140,0.35)';
+  cx.lineWidth = 3;
+  cx.beginPath();
+  cx.arc(FWX, WCY, WR + 11, TAU * 0.78, TAU * 0.22, false);
+  cx.stroke();
+  cx.restore();
+
+  // ── Rear fender arch liner ────────────────────────────────────
+  cx.save();
+  cx.strokeStyle = 'rgba(40,80,140,0.35)';
+  cx.lineWidth = 3;
+  cx.beginPath();
+  cx.arc(RWX, WCY, WR + 11, TAU * 0.78, TAU * 0.22, false);
+  cx.stroke();
+  cx.restore();
+
+  // ── Headlights ───────────────────────────────────────────────
+  cx.save();
+  // DRL strip
+  cx.shadowBlur = 18;
+  cx.shadowColor = '#ffffff';
+  cx.strokeStyle = 'rgba(255,255,245,0.95)';
+  cx.lineWidth = 3.5;
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(-248, -90); cx.lineTo(-215, -74);
+  cx.stroke();
+
+  // Main headlight
+  cx.shadowBlur = 25;
+  cx.shadowColor = '#bbddff';
+  cx.fillStyle = 'rgba(210,235,255,0.92)';
+  cx.beginPath();
+  cx.ellipse(-230, -70, 11, 14, -0.35, 0, PI2);
+  cx.fill();
+
+  cx.shadowBlur = 0;
+  cx.restore();
+
+  // ── Taillights ───────────────────────────────────────────────
+  cx.save();
+  const tp = 0.75 + 0.25 * Math.sin(t * 3.0 + 1.4);
+  cx.shadowBlur = 22;
+  cx.shadowColor = '#ff1800';
+  cx.strokeStyle = `rgba(255,25,0,${tp})`;
+  cx.lineWidth = 4.5;
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(235, -80);
+  cx.bezierCurveTo(241, -68, 245, -50, 241, -34);
+  cx.stroke();
+
+  cx.shadowBlur = 28;
+  cx.fillStyle = `rgba(255,18,0,${tp * 0.75})`;
+  cx.beginPath();
+  cx.ellipse(237, -57, 7, 20, 0.2, 0, PI2);
+  cx.fill();
+
+  cx.shadowBlur = 0;
+  cx.restore();
+
+  // ── Exhaust pipes ────────────────────────────────────────────
+  cx.save();
+  const eg = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 5 + Math.random() * 0.3));
+  [-18, 12].forEach(ex => {
+    const ex2 = 238 + ex * 0.35;
+    cx.fillStyle = '#080808';
+    cx.strokeStyle = '#202030';
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    cx.ellipse(ex2, -14, 9, 7, 0.1, 0, PI2);
+    cx.fill(); cx.stroke();
+
+    cx.shadowBlur = 18 * eg;
+    cx.shadowColor = `rgba(255,90,0,${eg})`;
+    cx.fillStyle = `rgba(255,70,0,${eg * 0.55})`;
+    cx.beginPath();
+    cx.ellipse(ex2, -14, 5.5, 4, 0.1, 0, PI2);
+    cx.fill();
+    cx.shadowBlur = 0;
+  });
+  cx.restore();
+
+  // Exhaust spark source (world coords, for emitSpark)
+  const sparkX = orgX + sc * 242;
+  const sparkY = orgY + sc * -14;
+  emitSpark(sparkX, sparkY);
+
+  cx.restore();  // end car transform
+
+  return orgX;  // return for reflections
+}
+
+// ─── Rain / streaks / sparks ─────────────────────────────────────────────────
+
+function drawRain(dt) {
+  cx.save();
+  cx.strokeStyle = 'rgba(180,205,255,1)';
+  cx.lineWidth = 0.8;
+  cx.lineCap = 'round';
+  RAIN.forEach(d => {
+    d.x -= 0.0015 * dt * 60;
+    d.y += d.spd * dt * 60;
+    if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+    if (d.x < -0.01) d.x = 1.02;
+    cx.globalAlpha = d.a;
+    cx.beginPath();
+    const sx = d.x * W, sy = d.y * H;
+    cx.moveTo(sx, sy);
+    cx.lineTo(sx + d.len * 0.16, sy - d.len);
+    cx.stroke();
+  });
+  cx.globalAlpha = 1;
+  cx.restore();
+}
+
+function drawStreaks(dt) {
+  cx.save();
+  STREAKS.forEach(s => {
+    s.x -= s.spd * dt * 60;
+    if (s.x + s.len < 0) { s.x = 1 + Math.random() * 0.2; s.y = 0.06 + Math.random() * 0.42; }
+    const sx = s.x * W, sy = s.y * H, sl = s.len * W;
+    const sg = cx.createLinearGradient(sx, 0, sx + sl, 0);
+    sg.addColorStop(0, 'rgba(220,235,255,0)');
+    sg.addColorStop(0.5, 'rgba(220,235,255,1)');
+    sg.addColorStop(1, 'rgba(220,235,255,0)');
+    cx.globalAlpha = s.a;
+    cx.fillStyle = sg;
+    cx.fillRect(sx, sy, sl, 1.5);
+  });
+  cx.globalAlpha = 1;
+  cx.restore();
+}
+
+function drawSparks(dt) {
+  cx.save();
+  sparks = sparks.filter(s => s.life > 0);
+  sparks.forEach(s => {
+    s.x += s.vx * W * dt * 60;
+    s.y += s.vy * H * dt * 60;
+    s.vy += 0.0003 * dt * 60;
+    s.life -= s.dec * dt * 60;
+    cx.globalAlpha = Math.max(0, s.life);
+    cx.shadowBlur = 7;
+    cx.shadowColor = `hsl(${s.hue},100%,60%)`;
+    cx.fillStyle = `hsl(${s.hue},100%,70%)`;
+    cx.beginPath();
+    cx.arc(s.x, s.y, s.sz * s.life, 0, PI2);
+    cx.fill();
+  });
+  cx.shadowBlur = 0;
+  cx.globalAlpha = 1;
+  cx.restore();
+}
+
+// ─── Main loop ───────────────────────────────────────────────────────────────
+
+function frame(ts) {
+  const dt = Math.min((ts - last) / 1000, 0.05);
+  last = ts;
+  t += dt;
+  GY = H * 0.70;
+
+  cx.clearRect(0, 0, W, H);
+
+  drawSky();
+  drawStars();
+  drawMoon();
+  drawCity();
+  drawRoad();
+  drawStreaks(dt);
+
+  const carX = drawCar();  // also emits sparks, returns center X
+
+  drawReflections(carX);
+  drawSparks(dt);
+  drawRain(dt);
+
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
