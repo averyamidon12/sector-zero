@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clock</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0d0d0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .clock {
+    text-align: center;
+    padding: 18px 28px;
+    border-radius: 10px;
+    background: #111;
+    border: 1px solid #222;
+  }
+
+  .time {
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: #e8e8e8;
+    line-height: 1;
+  }
+
+  .time .seconds {
+    color: #888;
+  }
+
+  .time .ampm {
+    font-size: 14px;
+    color: #555;
+    margin-left: 3px;
+    vertical-align: baseline;
+  }
+
+  .date {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #3a3a3a;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="clock">
+  <div class="time" id="time"></div>
+  <div class="date" id="date"></div>
+</div>
+
+<script>
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function update() {
+    const now = new Date();
+    let h = now.getHours();
+    const m = now.getMinutes();
+    const s = now.getSeconds();
+    const ampm = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+
+    const pad = n => String(n).padStart(2, '0');
+
+    document.getElementById('time').innerHTML =
+      `${h}:${pad(m)}:<span class="seconds">${pad(s)}</span><span class="ampm">${ampm}</span>`;
+
+    document.getElementById('date').textContent =
+      `${DAYS[now.getDay()]}  ·  ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+  }
+
+  update();
+
+  // Sync tick to the exact second boundary
+  const now = new Date();
+  setTimeout(() => {
+    update();
+    setInterval(update, 1000);
+  }, 1000 - now.getMilliseconds());
+</script>
+</body>
+</html>
