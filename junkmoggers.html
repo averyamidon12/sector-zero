@@ -27,7 +27,7 @@ a{text-decoration:none}
   --border:rgba(255,255,255,.07);
   --muted:#999;
   --white:#fff;
-  --hh:68px;
+  --hh:80px;
 }
 
 /* ===== NOISE TEXTURE (SVG data URI) ===== */
@@ -50,21 +50,21 @@ a{text-decoration:none}
 /* ===== HEADER ===== */
 .site-header{position:fixed;top:0;left:0;right:0;z-index:999;height:var(--hh);background:rgba(13,13,13,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:2px solid var(--orange);transition:box-shadow .25s}
 .site-header.scrolled{box-shadow:0 4px 32px rgba(0,0,0,.55)}
-.header-inner{display:flex;align-items:center;justify-content:space-between;height:100%}
+.header-inner{display:flex;align-items:center;justify-content:space-between;height:100%;gap:32px}
 
-.logo{display:flex;align-items:center;gap:11px;text-decoration:none}
-.logo-icon{width:38px;height:38px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:1.15rem;clip-path:polygon(10% 0%,100% 0%,90% 100%,0% 100%)}
+.logo{display:flex;align-items:center;gap:14px;text-decoration:none}
+.logo-icon{width:46px;height:46px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:1.35rem;clip-path:polygon(10% 0%,100% 0%,90% 100%,0% 100%);flex-shrink:0}
 .logo-wordmark{line-height:1}
-.logo-name{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:.05em;color:#fff}
+.logo-name{font-family:'Bebas Neue',sans-serif;font-size:1.75rem;letter-spacing:.05em;color:#fff}
 .logo-name span{color:var(--orange)}
-.logo-tagline{font-family:'Barlow Condensed',sans-serif;font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.logo-tagline{font-family:'Barlow Condensed',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 
-.header-right{display:flex;align-items:center;gap:18px}
-.header-phone-block{display:flex;flex-direction:column;align-items:flex-end}
-.header-phone-eyebrow{font-size:.6rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:2px}
-.header-phone-num{font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;letter-spacing:.03em;color:#fff;transition:color .18s}
+.header-right{display:flex;align-items:center;gap:28px}
+.header-phone-block{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.header-phone-eyebrow{font-size:.65rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--orange)}
+.header-phone-num{font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:700;letter-spacing:.03em;color:#fff;transition:color .18s}
 .header-phone-num:hover{color:var(--orange)}
-.header-cta-btn{background:var(--orange);color:#fff;padding:9px 18px;font-family:'Barlow Condensed',sans-serif;font-size:.9rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;transition:background .18s;white-space:nowrap}
+.header-cta-btn{background:var(--orange);color:#fff;padding:13px 26px;font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;transition:background .18s;white-space:nowrap}
 .header-cta-btn:hover{background:var(--orange-h)}
 
 /* ===== HERO ===== */
