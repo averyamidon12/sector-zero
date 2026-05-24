@@ -59,13 +59,21 @@ a{text-decoration:none}
 .logo-name span{color:var(--orange)}
 .logo-tagline{font-family:'Barlow Condensed',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 
-.header-right{display:flex;align-items:center;gap:28px}
-.header-phone-block{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
-.header-phone-eyebrow{font-size:.65rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--orange)}
-.header-phone-num{font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:700;letter-spacing:.03em;color:#fff;transition:color .18s}
-.header-phone-num:hover{color:var(--orange)}
-.header-cta-btn{background:var(--orange);color:#fff;padding:13px 26px;font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;transition:background .18s;white-space:nowrap}
-.header-cta-btn:hover{background:var(--orange-h)}
+/* ===== HAMBURGER MENU ===== */
+.hamburger{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:8px;width:44px;height:44px}
+.hamburger span{display:block;width:26px;height:2.5px;background:#fff;border-radius:2px;transition:transform .3s,opacity .3s,background .2s}
+.hamburger:hover span{background:var(--orange)}
+.hamburger.open span:nth-child(1){transform:translateY(7.5px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7.5px) rotate(-45deg)}
+
+.nav-dropdown{position:absolute;top:calc(var(--hh) + 2px);right:0;width:240px;background:rgba(18,18,18,.98);border:1px solid var(--border);border-top:2px solid var(--orange);display:none;flex-direction:column;z-index:998}
+.nav-dropdown.open{display:flex}
+.nav-link{display:flex;align-items:center;gap:12px;padding:15px 22px;font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#ccc;border-bottom:1px solid var(--border);transition:color .18s,background .18s}
+.nav-link:last-child{border-bottom:none}
+.nav-link:hover{color:#fff;background:var(--orange-dim)}
+.nav-link .nav-dot{width:5px;height:5px;border-radius:50%;background:var(--orange);flex-shrink:0}
+.nav-wrap{position:relative}
 
 /* ===== HERO ===== */
 .hero{position:relative;min-height:100vh;display:flex;align-items:center;padding-top:var(--hh);overflow:hidden;background:var(--black)}
@@ -252,12 +260,18 @@ section{padding:96px 0}
         </div>
       </a>
 
-      <div class="header-right">
-        <div class="header-phone-block">
-          <span class="header-phone-eyebrow">Same-Day Available — Call Now</span>
-          <a href="tel:[PHONE]" class="header-phone-num">[PHONE]</a>
-        </div>
-        <a href="#quote" class="header-cta-btn">Get a Quote</a>
+      <div class="nav-wrap">
+        <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="nav-dropdown" id="nav-dropdown">
+          <a href="#services" class="nav-link"><span class="nav-dot"></span>Services</a>
+          <a href="#how" class="nav-link"><span class="nav-dot"></span>How It Works</a>
+          <a href="#reviews" class="nav-link"><span class="nav-dot"></span>Reviews</a>
+          <a href="#why" class="nav-link"><span class="nav-dot"></span>Why Us</a>
+          <a href="#area" class="nav-link"><span class="nav-dot"></span>Service Area</a>
+          <a href="#quote" class="nav-link"><span class="nav-dot"></span>Get a Quote</a>
+        </nav>
       </div>
 
     </div>
@@ -655,6 +669,23 @@ window.addEventListener('scroll', () => {
   header.classList.toggle('scrolled', window.scrollY > 24);
 }, { passive: true });
 
+// Hamburger menu toggle
+const hamburger = document.getElementById('hamburger');
+const navDropdown = document.getElementById('nav-dropdown');
+hamburger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = navDropdown.classList.toggle('open');
+  hamburger.classList.toggle('open', open);
+  hamburger.setAttribute('aria-expanded', open);
+});
+// Close on outside click
+document.addEventListener('click', () => {
+  navDropdown.classList.remove('open');
+  hamburger.classList.remove('open');
+  hamburger.setAttribute('aria-expanded', false);
+});
+navDropdown.addEventListener('click', e => e.stopPropagation());
+
 // Smooth scroll for all internal anchor links
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', function(e) {
@@ -663,6 +694,9 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     const target = document.querySelector(id);
     if (!target) return;
     e.preventDefault();
+    // Close nav if open
+    navDropdown.classList.remove('open');
+    hamburger.classList.remove('open');
     const offset = header.offsetHeight + 12;
     window.scrollTo({ top: target.offsetTop - offset, behavior: 'smooth' });
   });
